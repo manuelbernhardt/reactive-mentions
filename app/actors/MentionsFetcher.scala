@@ -21,6 +21,8 @@ import scala.concurrent.Future
 
 class MentionsFetcher extends Actor with ActorLogging {
 
+  implicit val executionContext = context.dispatcher
+
   val scheduler = context.system.scheduler.schedule(
     initialDelay = 5.seconds,
     interval = 10.minutes,
