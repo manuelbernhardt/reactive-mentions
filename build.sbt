@@ -16,7 +16,8 @@ libraryDependencies ++= Seq(
   "org.jooq" % "jooq-meta" % "3.7.0",
   "com.typesafe.akka" %% "akka-actor" % "2.4.1",
   "com.typesafe.akka" %% "akka-slf4j" % "2.4.1",
-  specs2 % Test
+  "com.ning" % "async-http-client" % "1.9.29",
+   specs2 % Test
 )
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
