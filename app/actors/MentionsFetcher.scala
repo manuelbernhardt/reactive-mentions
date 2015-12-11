@@ -3,11 +3,15 @@ package actors
 import actors.MentionsFetcher._
 import akka.actor.{ActorLogging, Actor}
 import org.joda.time.DateTime
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import play.api.Play
 import play.api.Play.current
 import play.api.libs.oauth.{RequestToken, ConsumerKey}
+
+import akka.pattern.pipe
+import scala.util.control.NonFatal
 
 class MentionsFetcher extends Actor with ActorLogging {
 
@@ -27,7 +31,25 @@ class MentionsFetcher extends Actor with ActorLogging {
     case MentionsReceived(mentions) => storeMentions(mentions)
   }
 
-  def checkMentions = ???
+  var lastSeenMentionTime: Option[DateTime] = None
+
+  def checkMentions = {
+      val maybeMentions = for {
+        (consumerKey, requestToken) <- credentials
+        time <- lastSeenMentionTime
+      } yield fetchMentions(consumerKey, requestToken, "elmanu", time)
+
+      maybeMentions.foreach { mentions =>
+        mentions.map { m =>
+          MentionsReceived(m)
+        } recover { case NonFatal(t) =>
+          log.error(t, "Could not fetch mentions")
+          MentionsReceived(Seq.empty)
+        } pipeTo self
+      }
+  }
+
+  def fetchMentions(consumerKey: ConsumerKey, requestToken: RequestToken, user: String, time: DateTime): Future[Seq[Mention]] = ???
 
   def storeMentions(mentions: Seq[Mention]) = ???
 
