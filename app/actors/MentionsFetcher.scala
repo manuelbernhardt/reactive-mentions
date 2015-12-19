@@ -18,8 +18,12 @@ import play.api.libs.json.JsArray
 import play.api.libs.ws.WS
 import scala.concurrent.Future
 
+import javax.inject.Inject
+import com.google.inject.AbstractModule
+import play.api.libs.concurrent.AkkaGuiceSupport
+import database.DB
 
-class MentionsFetcher extends Actor with ActorLogging {
+class MentionsFetcher @Inject() (db: DB) extends Actor with ActorLogging {
 
   implicit val executionContext = context.dispatcher
 
@@ -99,4 +103,9 @@ object MentionsFetcher {
   case class User(handle: String, id: String)
   case class MentionsReceived(mentions: Seq[Mention])
 
+}
+
+class MentionsFetcherModule extends AbstractModule with AkkaGuiceSupport {
+  def configure(): Unit =
+    bindActor[MentionsFetcher]("fetcher")
 }
