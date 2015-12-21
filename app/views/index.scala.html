@@ -1,7 +1,7 @@
-@(message: String)
+@(mentionsCount: Int)
 
-@main("Welcome to Play") {
+@main("Reactive mentions") {
 
-    @play20.welcome(message)
+    <p>You have been mentioned @mentionsCount times in the past days</p>
 
 }
