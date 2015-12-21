@@ -1,5 +1,6 @@
 package actors
 
+import java.sql.Timestamp
 import java.util.Locale
 
 import actors.MentionsFetcher._
@@ -23,6 +24,9 @@ import com.google.inject.AbstractModule
 import play.api.libs.concurrent.AkkaGuiceSupport
 import database.DB
 
+import generated.Tables._
+import org.jooq.impl.DSL._
+
 class MentionsFetcher @Inject() (db: DB) extends Actor with ActorLogging {
 
   implicit val executionContext = context.dispatcher
@@ -43,7 +47,7 @@ class MentionsFetcher @Inject() (db: DB) extends Actor with ActorLogging {
     case MentionsReceived(mentions) => storeMentions(mentions)
   }
 
-  var lastSeenMentionTime: Option[DateTime] = Some(DateTime.now)
+  var lastSeenMentionTime: Option[DateTime] = Some(DateTime.now.minusDays(2))
 
   def checkMentions = {
       val maybeMentions = for {
@@ -75,16 +79,61 @@ class MentionsFetcher @Inject() (db: DB) extends Actor with ActorLogging {
           val from = (status \ "user" \ "screen_name").as[String]
           val created_at = df.parseDateTime((status \ "created_at").as[String])
           val userMentions = (status \ "entities" \ "user_mentions").as[JsArray].value.map { user =>
-            User((user \ "screen_name").as[String], ((user \ "id_str").as[String]))
+            User((user \ "screen_name").as[String], (user \ "id_str").as[String])
           }
 
-          Mention(id, created_at, from, text, userMentions)
+          Mention(id, created_at, text, from, userMentions)
         }
         mentions.filter(_.created_at.isAfter(time))
     }
   }
 
-  def storeMentions(mentions: Seq[Mention]) = ???
+  def storeMentions(mentions: Seq[Mention]) = db.withTransaction { sql =>
+    log.info("Inserting potentially {} mentions into the database", mentions.size)
+    val now = new Timestamp(DateTime.now.getMillis)
+
+    def upsertUser(handle: String) = {
+      sql.insertInto(TWITTER_USER, TWITTER_USER.CREATED_ON, TWITTER_USER.TWITTER_USER_NAME)
+        .select(
+          select(value(now), value(handle))
+            .whereNotExists(
+              selectOne()
+                .from(TWITTER_USER)
+                .where(TWITTER_USER.TWITTER_USER_NAME.equal(handle))
+            )
+        )
+        .execute()
+    }
+
+    mentions.foreach { mention =>
+      // upsert the mentioning users
+      upsertUser(mention.from)
+
+      // upsert the mentioned users
+      mention.users.foreach { user =>
+        upsertUser(user.handle)
+      }
+
+      // upsert the mention
+      sql.insertInto(MENTIONS, MENTIONS.CREATED_ON, MENTIONS.TEXT, MENTIONS.TWEET_ID, MENTIONS.USER_ID)
+        .select(
+          select(
+            value(now),
+            value(mention.text),
+            value(mention.id),
+            TWITTER_USER.ID
+          )
+            .from(TWITTER_USER)
+            .where(TWITTER_USER.TWITTER_USER_NAME.equal(mention.from))
+            .andNotExists(
+              selectOne()
+                .from(MENTIONS)
+                .where(MENTIONS.TWEET_ID.equal(mention.id))
+            )
+        )
+        .execute()
+    }
+  }
 
   def credentials = for {
     apiKey <- Play.configuration.getString("twitter.apiKey")
