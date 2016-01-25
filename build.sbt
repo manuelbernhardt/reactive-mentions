@@ -35,4 +35,4 @@ val generateJOOQTask = (sourceManaged, fullClasspath in Compile, runner in Compi
 
 generateJOOQ <<= generateJOOQTask
 
- unmanagedSourceDirectories in Compile += sourceManaged.value / "main/generated"
+unmanagedSourceDirectories in Compile += sourceManaged.value / "main/generated"
